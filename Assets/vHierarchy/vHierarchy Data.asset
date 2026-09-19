@@ -13,7 +13,81 @@ MonoBehaviour:
   m_Name: vHierarchy Data
   m_EditorClassIdentifier: 
   sceneDatas_byGuid:
-    keys: []
-    values: []
+    keys:
+    - 956ed14b1d50cb944a73933f3dcea26b
+    values:
+    - goDatas_byGlobalId:
+        keys:
+        - globalObjectIdString: GlobalObjectId_V1-2-956ed14b1d50cb944a73933f3dcea26b-565782057-0
+        - globalObjectIdString: GlobalObjectId_V1-2-956ed14b1d50cb944a73933f3dcea26b-782069809-0
+        - globalObjectIdString: GlobalObjectId_V1-2-956ed14b1d50cb944a73933f3dcea26b-1138112146-0
+        - globalObjectIdString: GlobalObjectId_V1-2-956ed14b1d50cb944a73933f3dcea26b-1408961255-0
+        - globalObjectIdString: GlobalObjectId_V1-2-956ed14b1d50cb944a73933f3dcea26b-1664506326-0
+        - globalObjectIdString: GlobalObjectId_V1-2-956ed14b1d50cb944a73933f3dcea26b-603189334-0
+        - globalObjectIdString: GlobalObjectId_V1-2-956ed14b1d50cb944a73933f3dcea26b-1818583206-0
+        - globalObjectIdString: GlobalObjectId_V1-2-956ed14b1d50cb944a73933f3dcea26b-1222362001-0
+        - globalObjectIdString: GlobalObjectId_V1-2-956ed14b1d50cb944a73933f3dcea26b-938016141-0
+        - globalObjectIdString: GlobalObjectId_V1-2-956ed14b1d50cb944a73933f3dcea26b-311481456-0
+        - globalObjectIdString: GlobalObjectId_V1-2-956ed14b1d50cb944a73933f3dcea26b-1927157491-0
+        - globalObjectIdString: GlobalObjectId_V1-2-956ed14b1d50cb944a73933f3dcea26b-1313215402-0
+        - globalObjectIdString: GlobalObjectId_V1-2-956ed14b1d50cb944a73933f3dcea26b-1141403321-0
+        - globalObjectIdString: GlobalObjectId_V1-2-956ed14b1d50cb944a73933f3dcea26b-1349543820-0
+        values:
+        - colorIndex: 3
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 2
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 3
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 3
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 3
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 3
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 3
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 3
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 6
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 6
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 6
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 6
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 6
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 6
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
   bookmarks: []
   bookmarkedScenePaths: []
