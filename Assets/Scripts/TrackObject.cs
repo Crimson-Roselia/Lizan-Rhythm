@@ -65,14 +65,20 @@ public class TrackObject : MonoBehaviour
         if (!SongManager.Instance.audioSource.isPlaying)
             return;
 
-        double audioTime = GetInputAudioTime();
+        double audioTime = SongManager.Instance.GetInputAudioTime();
         float fallingTime = SongManager.Instance.GetNoteFallingTime();
+        double margin = SongManager.Instance.marginOfError;
 
         // 可能在同一帧内需要生成多个音符
         while (spawnIndex < timeStamps.Count &&
-               SongManager.Instance.GetAudioSourceTime() >= timeStamps[spawnIndex] - fallingTime)
+               audioTime >= timeStamps[spawnIndex] - fallingTime)
         {
-            NoteObject note = noteSpawner.SpawnNewNote(trackIndex, noteTheme);
+            NoteObject note = noteSpawner.SpawnNewNote(
+                trackIndex,
+                noteTheme,
+                timeStamps[spawnIndex],
+                fallingTime,
+                margin);
             notes.Add(note);
             spawnIndex++;
         }
@@ -84,7 +90,6 @@ public class TrackObject : MonoBehaviour
         }
 
         double noteTime = timeStamps[inputIndex];
-        double margin = SongManager.Instance.marginOfError;
         double delta = audioTime - noteTime;
 
         if (autoHit && audioTime >= noteTime)
@@ -134,10 +139,10 @@ public class TrackObject : MonoBehaviour
 
     private void Miss()
     {
-    }
-
-    private double GetInputAudioTime()
-    {
-        return SongManager.Instance.GetAudioSourceTime() - SongManager.Instance.inputDelayInMilliseconds / 1000.0;
+        if (inputIndex < notes.Count && notes[inputIndex] != null)
+        {
+            notes[inputIndex].OnMiss();
+            notes[inputIndex] = null;
+        }
     }
 }

@@ -51,6 +51,10 @@ public class MidiFileImporter : MonoBehaviour
 
     public string levelPath = "Level 1";
 
+    [Header("按音高拆分轨道")]
+    [Tooltip("开启后，同一 MIDI 文件中每种 pitch 会拆分为一条逻辑轨道，并按 pitch 从高到低排列。最高 pitch 对应索引 0。")]
+    public bool splitTracksByPitch = false;
+
     [Header("测试：音符随机分配（不影响默认流程，需手动开启）")]
     public bool enableTestNoteDistribute = false;
     
@@ -72,8 +76,12 @@ public class MidiFileImporter : MonoBehaviour
             Debug.LogError("Level文件夹不存在: " + levelPath);
             return;
         }
+
+        // 重新加载时保持轨道索引稳定，避免重复追加同一批 MIDI 数据。
+        midiTracks.Clear();
         
         string[] midiFiles = Directory.GetFiles(levelPath, "*.mid");
+        Array.Sort(midiFiles, StringComparer.OrdinalIgnoreCase);
         
         foreach (string filePath in midiFiles)
         {
@@ -82,10 +90,10 @@ public class MidiFileImporter : MonoBehaviour
             
             Debug.Log($"正在加载MIDI文件: {fileName}, 类型: {(isLongNote ? "长音符" : "单音符")}");
             
-            MidiTrack track = LoadMidiFile(filePath, isLongNote);
-            if (track != null)
+            List<MidiTrack> tracks = LoadMidiFile(filePath, isLongNote);
+            if (tracks != null)
             {
-                midiTracks.Add(track);
+                midiTracks.AddRange(tracks);
             }
         }
         
@@ -211,7 +219,7 @@ public class MidiFileImporter : MonoBehaviour
     /// <summary>
     /// 加载单个MIDI文件
     /// </summary>
-    MidiTrack LoadMidiFile(string filePath, bool isLongNote)
+    List<MidiTrack> LoadMidiFile(string filePath, bool isLongNote)
     {
         try
         {
@@ -220,13 +228,77 @@ public class MidiFileImporter : MonoBehaviour
             MidiTrack track = new MidiTrack(fileName, isLongNote);
             ParseMidiFile(midiData, track);
             
-            return track;
+            return splitTracksByPitch
+                ? SplitTrackByPitch(track)
+                : new List<MidiTrack> { track };
         }
         catch (Exception e)
         {
             Debug.LogError($"加载MIDI文件失败 {filePath}: {e.Message}");
             return null;
         }
+    }
+
+    /// <summary>
+    /// 按 MIDI pitch 将一个文件中的音符拆分为多条逻辑轨道。
+    /// 轨道顺序固定为 pitch 从高到低，因此最高 pitch 的轨道索引始终为 0。
+    /// </summary>
+    List<MidiTrack> SplitTrackByPitch(MidiTrack sourceTrack)
+    {
+        List<int> pitches = new List<int>();
+
+        foreach (MidiNote note in sourceTrack.notes)
+        {
+            if (!pitches.Contains(note.pitch))
+            {
+                pitches.Add(note.pitch);
+            }
+        }
+
+        pitches.Sort((a, b) => b.CompareTo(a));
+
+        if (pitches.Count <= 1)
+        {
+            return new List<MidiTrack> { sourceTrack };
+        }
+
+        List<MidiTrack> splitTracks = new List<MidiTrack>(pitches.Count);
+
+        foreach (int pitch in pitches)
+        {
+            MidiTrack splitTrack = new MidiTrack($"{sourceTrack.trackName}_pitch_{pitch}", sourceTrack.isLongNote);
+
+            foreach (MidiNote note in sourceTrack.notes)
+            {
+                if (note.pitch == pitch)
+                {
+                    splitTrack.notes.Add(note);
+                }
+            }
+
+            splitTrack.notes.Sort(CompareMidiNotesByTime);
+            splitTracks.Add(splitTrack);
+        }
+
+        Debug.Log($"MIDI文件 {sourceTrack.trackName} 已按 pitch 拆分为 {splitTracks.Count} 条轨道: {string.Join(", ", pitches)}");
+        return splitTracks;
+    }
+
+    int CompareMidiNotesByTime(MidiNote a, MidiNote b)
+    {
+        int timeComparison = a.timeInBeats.CompareTo(b.timeInBeats);
+        if (timeComparison != 0)
+        {
+            return timeComparison;
+        }
+
+        // 长音符在同一时刻切换时，先处理 Note Off，再处理下一次 Note On。
+        if (a.isNoteOn != b.isNoteOn)
+        {
+            return a.isNoteOn ? 1 : -1;
+        }
+
+        return 0;
     }
     
     /// <summary>

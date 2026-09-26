@@ -9,10 +9,20 @@ public class NoteSpawner : MonoBehaviour
     [SerializeField] private Transform noteMissLine;
 
 
-    public NoteObject SpawnNewNote(int trackIndex, int prefabIndex)
+    public NoteObject SpawnNewNote(int trackIndex, int prefabIndex, double noteTime, float fallingTime, double missWindow)
     {
-        NoteObject noteObject = Instantiate(notePrefabs[prefabIndex], noteSpawnPoints[trackIndex].position, notePrefabs[prefabIndex].transform.rotation).GetComponent<NoteObject>();
-        noteObject.SetXThereshold(noteMissLine.transform.position.x);
+        Transform spawnPoint = noteSpawnPoints[trackIndex];
+        NoteObject noteObject = Instantiate(notePrefabs[prefabIndex], spawnPoint.position, notePrefabs[prefabIndex].transform.rotation).GetComponent<NoteObject>();
+
+        // The lanes differ only along Z, so preserve the spawned note's lane while using
+        // the Miss line's X coordinate as the destination.
+        Vector3 missPosition = new Vector3(noteMissLine.position.x, spawnPoint.position.y, spawnPoint.position.z);
+        noteObject.Initialize(
+            spawnPoint.position,
+            missPosition,
+            noteTime - fallingTime,
+            noteTime + missWindow);
+
         return noteObject;
     }
 }

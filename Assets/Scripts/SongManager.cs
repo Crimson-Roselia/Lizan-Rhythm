@@ -37,4 +37,10 @@ public class SongManager : MonoBehaviour
         return (double)audioSource.timeSamples / audioSource.clip.frequency;
     }
 
+    // Keep visual note timing on the same clock that TrackObject uses for input and Miss checks.
+    public double GetInputAudioTime()
+    {
+        return GetAudioSourceTime() - inputDelayInMilliseconds / 1000.0;
+    }
+
 }
