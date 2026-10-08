@@ -21,28 +21,50 @@ public class NoteObject : MonoBehaviour
         transform.position = _spawnPosition;
     }
 
-    void Update()
+    protected virtual void LateUpdate()
     {
         if (!_isInitialized || SongManager.Instance == null || SongManager.Instance.audioSource == null)
             return;
 
-        // Use the same audio clock as TrackObject's Miss condition. This makes the
-        // note's speed distance / (_missTime - _moveStartTime), independent of frame rate.
+        UpdatePosition(SongManager.Instance.GetInputAudioTime());
+    }
+
+    public Vector3 GetPositionAtTime(double audioTime)
+    {
+        // 使用与轨道判定相同的音频时钟，保持移动速度与帧率无关。
         double duration = _missTime - _moveStartTime;
         float progress = duration <= 0.0
             ? 1f
-            : Mathf.Clamp01((float)((SongManager.Instance.GetInputAudioTime() - _moveStartTime) / duration));
+            : Mathf.Clamp01((float)((audioTime - _moveStartTime) / duration));
 
-        transform.position = Vector3.Lerp(_spawnPosition, _missPosition, progress);
+        return Vector3.Lerp(_spawnPosition, _missPosition, progress);
     }
 
-    public void OnHit()
+    public void UpdatePosition(double audioTime)
     {
-        Instantiate(hitVfx, transform.position + new Vector3(0, 0.05f, 0), Quaternion.identity);
+        if (_isInitialized)
+            transform.position = GetPositionAtTime(audioTime);
+    }
+
+    public void HoldAt(Vector3 position)
+    {
+        _isInitialized = false;
+        transform.position = position;
+    }
+
+    public void PlayHitEffect()
+    {
+        if (hitVfx != null)
+            Instantiate(hitVfx, transform.position + new Vector3(0, 0.05f, 0), Quaternion.identity);
+    }
+
+    public virtual void OnHit()
+    {
+        PlayHitEffect();
         Destroy(gameObject);
     }
     
-    public void OnMiss()
+    public virtual void OnMiss()
     {
         // TrackObject can run before this object's Update in the Miss frame.
         // Snap first so the note is at the requested position at judgement time.

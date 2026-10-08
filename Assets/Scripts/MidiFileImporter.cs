@@ -1,20 +1,21 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using System.IO;
 using System;
+using System.Collections.Generic;
+using System.IO;
+using UnityEngine;
 
-[System.Serializable]
+[Serializable]
 public class MidiNote
 {
-    public int pitch;               // MIDI音高 (0-127, 60=中央C)
-    public double timeInSeconds;     // 播放时间（秒）
-    public double timeInBeats;       // 播放时间（拍）
-    public int velocity;            // 力度 (0-127)
-    public bool isNoteOn;           // true=按下, false=释放（仅用于长音符）
-    public float duration;          // 音符长度（秒，仅用于单音符）
-    
-    public MidiNote(int note, double timeInSec, double timeInBeats, int vel, bool noteOn = true, float dur = 0f)
+    public int pitch;
+    public double timeInSeconds;
+    public double timeInBeats;
+    public int velocity;
+    public int channel;
+    public bool isNoteOn;
+    public float duration;
+
+    public MidiNote(int note, double timeInSec, double timeInBeats, int vel,
+        bool noteOn = true, float dur = 0f, int channel = 0)
     {
         pitch = note;
         timeInSeconds = timeInSec;
@@ -22,601 +23,456 @@ public class MidiNote
         velocity = vel;
         isNoteOn = noteOn;
         duration = dur;
+        this.channel = channel;
     }
 }
 
-[System.Serializable]
+[Serializable]
+public class MidiLongNote
+{
+    public int pitch;
+    public int velocity;
+    public int channel;
+    public double startTimeInSeconds;
+    public double endTimeInSeconds;
+    public double startTimeInBeats;
+    public double endTimeInBeats;
+
+    public MidiLongNote(int pitch, int velocity, int channel, double startTimeInSeconds,
+        double endTimeInSeconds, double startTimeInBeats, double endTimeInBeats)
+    {
+        this.pitch = pitch;
+        this.velocity = velocity;
+        this.channel = channel;
+        this.startTimeInSeconds = startTimeInSeconds;
+        this.endTimeInSeconds = endTimeInSeconds;
+        this.startTimeInBeats = startTimeInBeats;
+        this.endTimeInBeats = endTimeInBeats;
+    }
+}
+
+[Serializable]
 public class MidiTrack
 {
     public string trackName;
-    public List<MidiNote> notes;
-    public bool isLongNote;  // true=长音符轨道, false=单音符轨道
-    
+    public List<MidiNote> notes = new List<MidiNote>();
+    public List<MidiLongNote> longNotes = new List<MidiLongNote>();
+    public bool isLongNote; // 轨道包含长音符；同一轨道也可以包含普通音符。
+
     public MidiTrack(string name, bool longNote = false)
     {
         trackName = name;
         isLongNote = longNote;
-        notes = new List<MidiNote>();
     }
 }
 
 public class MidiFileImporter : MonoBehaviour
 {
     [Header("MIDI导入设置")]
-    [HideInInspector] public int bpm = 128;  // 每分钟拍数
-    [HideInInspector] public int ticksPerQuarter = 480;  // 每四分音符的tick数
-    
+    [HideInInspector] public int bpm = 128;
+    [HideInInspector] public int ticksPerQuarter = 480;
+
     [Header("导入的MIDI数据")]
     public List<MidiTrack> midiTracks = new List<MidiTrack>();
-
     public string levelPath = "Level 1";
 
-    [Header("按音高拆分轨道")]
-    [Tooltip("开启后，同一 MIDI 文件中每种 pitch 会拆分为一条逻辑轨道，并按 pitch 从高到低排列。最高 pitch 对应索引 0。")]
-    public bool splitTracksByPitch = false;
+    [Header("长音符识别")]
+    [Tooltip("按 MIDI Note On/Off 的时值识别长音符。文件名含 (long) 时，所有有效音符都作为长音符。")]
+    public bool detectLongNotesByDuration = true;
+    [Min(0.01f)]
+    [Tooltip("时值达到此拍数的音符作为长音符，其余作为普通音符。")]
+    public float minimumLongNoteBeats = 1f;
 
-    [Header("测试：音符随机分配（不影响默认流程，需手动开启）")]
-    public bool enableTestNoteDistribute = false;
-    
-    void Awake()
+    [Header("按音高拆分轨道")]
+    [Tooltip("同一 MIDI 文件按 pitch 从高到低拆分；最高 pitch 对应索引 0。")]
+    public bool splitTracksByPitch;
+
+    [Header("测试：音符随机分配（需手动开启）")]
+    public bool enableTestNoteDistribute;
+
+    private sealed class RawNote
     {
-        // 在 Awake 加载，保证 Lane.Start 能读到 midiTracks
+        public int pitch;
+        public int velocity;
+        public int channel;
+        public int startTicks;
+        public int endTicks = -1;
+    }
+
+    private struct TempoChange
+    {
+        public int ticks;
+        public int microsecondsPerQuarter;
+        public int order;
+    }
+
+    private void Awake()
+    {
+        // 在 Awake 加载，保证 TrackObject.Start 能读到 midiTracks。
         LoadAllMidiFiles();
     }
-    
-    /// <summary>
-    /// 加载所有MIDI文件
-    /// </summary>
+
     public void LoadAllMidiFiles()
     {
-        string levelPath = Path.Combine(Application.streamingAssetsPath, this.levelPath);
-        
-        if (!Directory.Exists(levelPath))
+        string directory = Path.Combine(Application.streamingAssetsPath, levelPath);
+        if (!Directory.Exists(directory))
         {
-            Debug.LogError("Level文件夹不存在: " + levelPath);
+            Debug.LogError("Level文件夹不存在: " + directory);
             return;
         }
 
-        // 重新加载时保持轨道索引稳定，避免重复追加同一批 MIDI 数据。
         midiTracks.Clear();
-        
-        string[] midiFiles = Directory.GetFiles(levelPath, "*.mid");
+        string[] midiFiles = Directory.GetFiles(directory, "*.mid");
         Array.Sort(midiFiles, StringComparer.OrdinalIgnoreCase);
-        
+
         foreach (string filePath in midiFiles)
         {
             string fileName = Path.GetFileNameWithoutExtension(filePath);
-            bool isLongNote = fileName.Contains("(long)");
-            
-            Debug.Log($"正在加载MIDI文件: {fileName}, 类型: {(isLongNote ? "长音符" : "单音符")}");
-            
-            List<MidiTrack> tracks = LoadMidiFile(filePath, isLongNote);
+            bool forceLongNotes = fileName.IndexOf("(long)", StringComparison.OrdinalIgnoreCase) >= 0;
+            List<MidiTrack> tracks = LoadMidiFile(filePath, forceLongNotes);
             if (tracks != null)
-            {
                 midiTracks.AddRange(tracks);
-            }
         }
-        
-        Debug.Log($"成功加载 {midiTracks.Count} 个MIDI轨道");
 
+        Debug.Log($"成功加载 {midiTracks.Count} 个MIDI轨道");
         if (enableTestNoteDistribute)
-        {
             TestDistributeNotesToNewTracks(0, 4);
-        }
     }
 
-    /// <summary>
-    /// 测试方法：在 midiTracks 中新建 n 个轨道，
-    /// 将指定索引轨道中的音符随机分配到这些新轨道中。
-    /// 长音符会以 Note On/Off 成对分配，避免拆散。
-    /// </summary>
     public void TestDistributeNotesToNewTracks(int sourceTrackIndex, int newTrackCount)
     {
-        if (newTrackCount <= 0)
+        if (newTrackCount <= 0 || sourceTrackIndex < 0 || sourceTrackIndex >= midiTracks.Count)
         {
-            Debug.LogWarning("TestDistributeNotesToNewTracks: newTrackCount 必须大于 0");
+            Debug.LogWarning("TestDistributeNotesToNewTracks: 无效的轨道索引或轨道数量");
             return;
         }
 
-        if (sourceTrackIndex < 0 || sourceTrackIndex >= midiTracks.Count)
-        {
-            Debug.LogWarning($"TestDistributeNotesToNewTracks: 无效的源轨道索引 {sourceTrackIndex}");
+        MidiTrack source = midiTracks[sourceTrackIndex];
+        int movedCount = source.notes.Count + source.longNotes.Count;
+        if (movedCount == 0)
             return;
-        }
-
-        MidiTrack sourceTrack = midiTracks[sourceTrackIndex];
-        if (sourceTrack.notes == null || sourceTrack.notes.Count == 0)
-        {
-            Debug.LogWarning($"TestDistributeNotesToNewTracks: 源轨道 [{sourceTrackIndex}] {sourceTrack.trackName} 没有音符可分配");
-            return;
-        }
 
         List<MidiTrack> newTracks = new List<MidiTrack>(newTrackCount);
         for (int i = 0; i < newTrackCount; i++)
         {
-            MidiTrack newTrack = new MidiTrack($"{sourceTrack.trackName}_split_{i}", sourceTrack.isLongNote);
-            newTracks.Add(newTrack);
-            midiTracks.Add(newTrack);
+            MidiTrack track = new MidiTrack($"{source.trackName}_split_{i}");
+            newTracks.Add(track);
+            midiTracks.Add(track);
         }
 
-        List<List<MidiNote>> noteUnits = BuildNoteUnits(sourceTrack);
-        System.Random rng = new System.Random();
+        System.Random random = new System.Random();
+        foreach (MidiNote note in source.notes)
+            newTracks[random.Next(newTrackCount)].notes.Add(note);
+        // 长音符是一个包含开始/结束时间的整体，拆分时不会拆散头尾。
+        foreach (MidiLongNote note in source.longNotes)
+            newTracks[random.Next(newTrackCount)].longNotes.Add(note);
 
-        foreach (List<MidiNote> unit in noteUnits)
-        {
-            int targetIndex = rng.Next(newTrackCount);
-            newTracks[targetIndex].notes.AddRange(unit);
-        }
-
-        // 按时间排序，保持各新轨道内事件顺序正确
         foreach (MidiTrack track in newTracks)
-        {
-            track.notes.Sort((a, b) => a.timeInBeats.CompareTo(b.timeInBeats));
-        }
+            SortTrack(track);
 
-        int movedCount = sourceTrack.notes.Count;
-        sourceTrack.notes.Clear();
-
-        Debug.Log($"TestDistributeNotesToNewTracks: 已将轨道 [{sourceTrackIndex}] {sourceTrack.trackName} 的 {movedCount} 个音符事件随机分配到 {newTrackCount} 个新轨道");
+        source.notes.Clear();
+        source.longNotes.Clear();
+        source.isLongNote = false;
+        Debug.Log($"已将轨道 [{sourceTrackIndex}] {source.trackName} 的 {movedCount} 个音符分配到 {newTrackCount} 条新轨道");
     }
 
-    /// <summary>
-    /// 将轨道音符整理为可分配单元：单音符每个独立；长音符 Note On 与对应 Note Off 成对。
-    /// </summary>
-    List<List<MidiNote>> BuildNoteUnits(MidiTrack track)
-    {
-        List<List<MidiNote>> units = new List<List<MidiNote>>();
-
-        if (!track.isLongNote)
-        {
-            foreach (MidiNote note in track.notes)
-            {
-                units.Add(new List<MidiNote> { note });
-            }
-            return units;
-        }
-
-        // 长音符：为每个 pitch 维护待配对的 Note On 队列
-        Dictionary<int, Queue<MidiNote>> pendingNoteOns = new Dictionary<int, Queue<MidiNote>>();
-
-        foreach (MidiNote note in track.notes)
-        {
-            if (note.isNoteOn)
-            {
-                if (!pendingNoteOns.ContainsKey(note.pitch))
-                {
-                    pendingNoteOns[note.pitch] = new Queue<MidiNote>();
-                }
-                pendingNoteOns[note.pitch].Enqueue(note);
-            }
-            else
-            {
-                if (pendingNoteOns.ContainsKey(note.pitch) && pendingNoteOns[note.pitch].Count > 0)
-                {
-                    MidiNote noteOn = pendingNoteOns[note.pitch].Dequeue();
-                    units.Add(new List<MidiNote> { noteOn, note });
-                }
-                else
-                {
-                    // 孤立的 Note Off，单独作为单元
-                    units.Add(new List<MidiNote> { note });
-                }
-            }
-        }
-
-        // 未配对的 Note On 单独作为单元
-        foreach (var kvp in pendingNoteOns)
-        {
-            while (kvp.Value.Count > 0)
-            {
-                units.Add(new List<MidiNote> { kvp.Value.Dequeue() });
-            }
-        }
-
-        return units;
-    }
-    
-    /// <summary>
-    /// 加载单个MIDI文件
-    /// </summary>
-    List<MidiTrack> LoadMidiFile(string filePath, bool isLongNote)
+    private List<MidiTrack> LoadMidiFile(string filePath, bool forceLongNotes)
     {
         try
         {
-            byte[] midiData = File.ReadAllBytes(filePath);
-            string fileName = Path.GetFileNameWithoutExtension(filePath);
-            MidiTrack track = new MidiTrack(fileName, isLongNote);
-            ParseMidiFile(midiData, track);
-            
-            return splitTracksByPitch
-                ? SplitTrackByPitch(track)
-                : new List<MidiTrack> { track };
+            MidiTrack track = new MidiTrack(Path.GetFileNameWithoutExtension(filePath), forceLongNotes);
+            ParseMidiFile(File.ReadAllBytes(filePath), track);
+            return splitTracksByPitch ? SplitTrackByPitch(track) : new List<MidiTrack> { track };
         }
-        catch (Exception e)
+        catch (Exception exception)
         {
-            Debug.LogError($"加载MIDI文件失败 {filePath}: {e.Message}");
+            Debug.LogError($"加载MIDI文件失败 {filePath}: {exception.Message}");
             return null;
         }
     }
 
-    /// <summary>
-    /// 按 MIDI pitch 将一个文件中的音符拆分为多条逻辑轨道。
-    /// 轨道顺序固定为 pitch 从高到低，因此最高 pitch 的轨道索引始终为 0。
-    /// </summary>
-    List<MidiTrack> SplitTrackByPitch(MidiTrack sourceTrack)
+    private List<MidiTrack> SplitTrackByPitch(MidiTrack source)
     {
-        List<int> pitches = new List<int>();
+        SortedDictionary<int, MidiTrack> byPitch = new SortedDictionary<int, MidiTrack>(
+            Comparer<int>.Create((a, b) => b.CompareTo(a)));
 
-        foreach (MidiNote note in sourceTrack.notes)
+        foreach (MidiNote note in source.notes)
         {
-            if (!pitches.Contains(note.pitch))
-            {
-                pitches.Add(note.pitch);
-            }
+            if (!byPitch.ContainsKey(note.pitch))
+                byPitch.Add(note.pitch, new MidiTrack($"{source.trackName}_pitch_{note.pitch}"));
+            byPitch[note.pitch].notes.Add(note);
         }
 
-        pitches.Sort((a, b) => b.CompareTo(a));
-
-        if (pitches.Count <= 1)
+        foreach (MidiLongNote note in source.longNotes)
         {
-            return new List<MidiTrack> { sourceTrack };
+            if (!byPitch.ContainsKey(note.pitch))
+                byPitch.Add(note.pitch, new MidiTrack($"{source.trackName}_pitch_{note.pitch}"));
+            byPitch[note.pitch].longNotes.Add(note);
         }
 
-        List<MidiTrack> splitTracks = new List<MidiTrack>(pitches.Count);
+        if (byPitch.Count <= 1)
+            return new List<MidiTrack> { source };
 
-        foreach (int pitch in pitches)
-        {
-            MidiTrack splitTrack = new MidiTrack($"{sourceTrack.trackName}_pitch_{pitch}", sourceTrack.isLongNote);
-
-            foreach (MidiNote note in sourceTrack.notes)
-            {
-                if (note.pitch == pitch)
-                {
-                    splitTrack.notes.Add(note);
-                }
-            }
-
-            splitTrack.notes.Sort(CompareMidiNotesByTime);
-            splitTracks.Add(splitTrack);
-        }
-
-        Debug.Log($"MIDI文件 {sourceTrack.trackName} 已按 pitch 拆分为 {splitTracks.Count} 条轨道: {string.Join(", ", pitches)}");
-        return splitTracks;
+        List<MidiTrack> tracks = new List<MidiTrack>(byPitch.Values);
+        foreach (MidiTrack track in tracks)
+            SortTrack(track);
+        Debug.Log($"MIDI文件 {source.trackName} 已按 pitch 拆分为 {tracks.Count} 条轨道: {string.Join(", ", byPitch.Keys)}");
+        return tracks;
     }
 
-    int CompareMidiNotesByTime(MidiNote a, MidiNote b)
+    private static void SortTrack(MidiTrack track)
     {
-        int timeComparison = a.timeInBeats.CompareTo(b.timeInBeats);
-        if (timeComparison != 0)
-        {
-            return timeComparison;
-        }
-
-        // 长音符在同一时刻切换时，先处理 Note Off，再处理下一次 Note On。
-        if (a.isNoteOn != b.isNoteOn)
-        {
-            return a.isNoteOn ? 1 : -1;
-        }
-
-        return 0;
+        track.notes.Sort((a, b) => a.timeInSeconds.CompareTo(b.timeInSeconds));
+        track.longNotes.Sort((a, b) => a.startTimeInSeconds.CompareTo(b.startTimeInSeconds));
+        track.isLongNote = track.longNotes.Count > 0;
     }
-    
-    /// <summary>
-    /// 解析MIDI文件数据
-    /// </summary>
-    void ParseMidiFile(byte[] data, MidiTrack track)
+
+    private void ParseMidiFile(byte[] data, MidiTrack track)
     {
-        int pos = 0;
-        
-        // 检查MIDI文件头
-        if (data.Length < 14 || 
-            data[0] != 0x4D || data[1] != 0x54 || data[2] != 0x68 || data[3] != 0x64)
+        if (data.Length < 14 || !HasChunkHeader(data, 0, "MThd"))
+            throw new FormatException("无效的MIDI文件头");
+
+        int headerLength = ReadInt32(data, 4);
+        RequireBytes(8, headerLength, data.Length);
+        if (headerLength < 6)
+            throw new FormatException("MIDI文件头长度不足");
+
+        int format = (data[8] << 8) | data[9];
+        int trackCount = (data[10] << 8) | data[11];
+        int division = (data[12] << 8) | data[13];
+        if (format > 1)
+            throw new NotSupportedException("仅支持 MIDI format 0/1");
+        if (division == 0 || (division & 0x8000) != 0)
+            throw new NotSupportedException("MIDI 必须使用每拍 tick 分辨率，暂不支持 SMPTE 时间码");
+        ticksPerQuarter = division;
+
+        List<RawNote> rawNotes = new List<RawNote>();
+        List<TempoChange> tempos = new List<TempoChange>();
+        int position = 8 + headerLength;
+        for (int i = 0; i < trackCount; i++)
+            position = ParseTrack(data, position, rawNotes, tempos);
+
+        tempos.Sort((a, b) => a.ticks != b.ticks ? a.ticks.CompareTo(b.ticks) : a.order.CompareTo(b.order));
+        bpm = tempos.Count == 0 ? 120 : (int)Math.Round(60000000.0 / tempos[0].microsecondsPerQuarter);
+        bool forceLongNotes = track.isLongNote;
+        int unmatchedCount = 0;
+
+        foreach (RawNote note in rawNotes)
         {
-            Debug.LogError("无效的MIDI文件格式");
-            return;
-        }
-        
-        // 读取头部信息
-        pos = 8; // 跳过"MThd"和长度
-        int format = (data[pos] << 8) | data[pos + 1];
-        pos += 2;
-        int trackCount = (data[pos] << 8) | data[pos + 1];
-        pos += 2;
-        int division = (data[pos] << 8) | data[pos + 1];
-        pos += 2;
-        
-        if (division > 0)
-        {
-            ticksPerQuarter = division;
-        }
-        
-        Debug.Log($"MIDI格式: {format}, 轨道数: {trackCount}, 分辨率: {ticksPerQuarter}");
-        
-        // 添加MIDI音高说明
-        Debug.Log("MIDI音高参考: 60=中央C, 每+12为高一个八度, 每-12为低一个八度");
-        
-        // 解析轨道数据
-        for (int t = 0; t < trackCount && pos < data.Length; t++)
-        {
-            pos = ParseTrack(data, pos, track);
-        }
-    }
-    
-    /// <summary>
-    /// 解析MIDI轨道
-    /// </summary>
-    int ParseTrack(byte[] data, int startPos, MidiTrack track)
-    {
-        int pos = startPos;
-        
-        // 检查轨道头
-        if (pos + 8 > data.Length || 
-            data[pos] != 0x4D || data[pos + 1] != 0x54 || data[pos + 2] != 0x72 || data[pos + 3] != 0x6B)
-        {
-            Debug.LogWarning("无效的轨道头");
-            return pos + 8;
-        }
-        
-        pos += 4; // 跳过"MTrk"
-        
-        // 读取轨道长度
-        int trackLength = (data[pos] << 24) | (data[pos + 1] << 16) | (data[pos + 2] << 8) | data[pos + 3];
-        pos += 4;
-        
-        int trackEnd = pos + trackLength;
-        int currentTicks = 0;
-        byte lastStatus = 0;
-        
-        Dictionary<int, int> noteOnTimes = new Dictionary<int, int>(); // 用于长音符的按下时间记录
-        
-        while (pos < trackEnd && pos < data.Length)
-        {
-            // 读取delta time
-            int deltaTime;
-            pos = ReadVariableLength(data, pos, out deltaTime);
-            currentTicks += deltaTime;
-            
-            if (pos >= data.Length) break;
-            
-            byte status = data[pos];
-            
-            // 处理运行状态
-            if ((status & 0x80) == 0)
+            double startSeconds = TicksToSeconds(note.startTicks, tempos);
+            double startBeats = (double)note.startTicks / ticksPerQuarter;
+            bool hasEnd = note.endTicks > note.startTicks;
+            double endSeconds = hasEnd ? TicksToSeconds(note.endTicks, tempos) : startSeconds;
+            double endBeats = hasEnd ? (double)note.endTicks / ticksPerQuarter : startBeats;
+            double durationBeats = hasEnd ? (double)(note.endTicks - note.startTicks) / ticksPerQuarter : 0;
+            bool isLong = hasEnd && (forceLongNotes ||
+                (detectLongNotesByDuration && durationBeats >= Math.Max(0.01, minimumLongNoteBeats)));
+
+            if (isLong)
             {
-                status = lastStatus;
-                pos--; // 回退一位，因为这不是状态字节
-            }
-            
-            pos++;
-            
-            if ((status & 0xF0) == 0x90) // Note On
-            {
-                if (pos + 1 >= data.Length) break;
-                
-                int note = data[pos];
-                int velocity = data[pos + 1];
-                pos += 2;
-                
-                double timeInSeconds = TicksToSeconds(currentTicks);
-                double timeInBeats = TicksToBeats(currentTicks);
-                
-                if (velocity == 0) // Note On with velocity 0 = Note Off
-                {
-                    if (track.isLongNote && noteOnTimes.ContainsKey(note))
-                    {
-                        // 添加Note Off事件
-                        track.notes.Add(new MidiNote(note, timeInSeconds, timeInBeats, velocity, false));
-                        noteOnTimes.Remove(note);
-                    }
-                }
-                else
-                {
-                    if (track.isLongNote)
-                    {
-                        // 长音符：添加Note On事件
-                        track.notes.Add(new MidiNote(note, timeInSeconds, timeInBeats, velocity, true));
-                        noteOnTimes[note] = currentTicks;
-                    }
-                    else
-                    {
-                        // 单音符：创建单个音符事件（duration稍后计算）
-                        track.notes.Add(new MidiNote(note, timeInSeconds, timeInBeats, velocity, true, 0.1f));
-                    }
-                }
-            }
-            else if ((status & 0xF0) == 0x80) // Note Off
-            {
-                if (pos + 1 >= data.Length) break;
-                
-                int note = data[pos];
-                int velocity = data[pos + 1];
-                pos += 2;
-                
-                double timeInSeconds = TicksToSeconds(currentTicks);
-                double timeInBeats = TicksToBeats(currentTicks);
-                
-                if (track.isLongNote && noteOnTimes.ContainsKey(note))
-                {
-                    // 添加Note Off事件
-                    track.notes.Add(new MidiNote(note, timeInSeconds, timeInBeats, velocity, false));
-                    noteOnTimes.Remove(note);
-                }
-            }
-            else if (status == 0xFF) // Meta Event
-            {
-                if (pos >= data.Length) break;
-                
-                byte metaType = data[pos++];
-                
-                int length;
-                pos = ReadVariableLength(data, pos, out length);
-                
-                if (metaType == 0x51 && length == 3) // Set Tempo
-                {
-                    if (pos + 2 < data.Length)
-                    {
-                        int microsecondsPerQuarter = (data[pos] << 16) | (data[pos + 1] << 8) | data[pos + 2];
-                        bpm = 60000000 / microsecondsPerQuarter;
-                        Debug.Log($"检测到BPM: {bpm}");
-                    }
-                }
-                
-                pos += length;
+                track.longNotes.Add(new MidiLongNote(note.pitch, note.velocity, note.channel,
+                    startSeconds, endSeconds, startBeats, endBeats));
             }
             else
             {
-                // 跳过其他事件
-                int length = GetMidiEventLength(status);
-                pos += length;
+                // 缺少 Note Off 时保留为普通音符，避免生成永远无法完成的长音符。
+                track.notes.Add(new MidiNote(note.pitch, startSeconds, startBeats, note.velocity,
+                    true, (float)(endSeconds - startSeconds), note.channel));
             }
-            
-            lastStatus = status;
+
+            if (note.endTicks < 0)
+                unmatchedCount++;
         }
-        
-        return trackEnd;
+
+        SortTrack(track);
+        if (unmatchedCount > 0)
+            Debug.LogWarning($"MIDI文件 {track.trackName}: {unmatchedCount} 个 Note On 缺少 Note Off，已保留为普通音符");
+        Debug.Log($"MIDI文件 {track.trackName}: {track.notes.Count} 个普通音符，{track.longNotes.Count} 个长音符");
     }
-    
-    /// <summary>
-    /// 读取可变长度数值
-    /// </summary>
-    int ReadVariableLength(byte[] data, int pos, out int value)
+
+    private int ParseTrack(byte[] data, int position, List<RawNote> notes, List<TempoChange> tempos)
     {
-        value = 0;
-        byte b;
-        
-        do
+        RequireBytes(position, 8, data.Length);
+        if (!HasChunkHeader(data, position, "MTrk"))
+            throw new FormatException("无效的MIDI轨道头");
+        int trackLength = ReadInt32(data, position + 4);
+        position += 8;
+        RequireBytes(position, trackLength, data.Length);
+        int end = position + trackLength;
+        int ticks = 0;
+        byte runningStatus = 0;
+
+        // 每条物理 MIDI 轨道独立配对，并按 channel/pitch 区分。
+        // 同音高重叠时使用队列，不会覆盖较早的 Note On。
+        Dictionary<int, Queue<RawNote>> pending = new Dictionary<int, Queue<RawNote>>();
+        while (position < end)
         {
-            if (pos >= data.Length) break;
-            b = data[pos++];
-            value = (value << 7) | (b & 0x7F);
-        } while ((b & 0x80) != 0);
-        
-        return pos;
-    }
-    
-    /// <summary>
-    /// 获取MIDI事件的长度
-    /// </summary>
-    int GetMidiEventLength(byte status)
-    {
-        switch (status & 0xF0)
-        {
-            case 0x80: // Note Off
-            case 0x90: // Note On
-            case 0xA0: // Aftertouch
-            case 0xB0: // Control Change
-            case 0xE0: // Pitch Bend
-                return 2;
-            case 0xC0: // Program Change
-            case 0xD0: // Channel Pressure
-                return 1;
-            default:
-                return 0;
+            ticks = checked(ticks + ReadVariableLength(data, ref position, end));
+            RequireBytes(position, 1, end);
+            byte status = data[position];
+            if ((status & 0x80) != 0)
+            {
+                position++;
+                runningStatus = status < 0xF0 ? status : (byte)0;
+            }
+            else
+            {
+                if (runningStatus == 0)
+                    throw new FormatException("MIDI运行状态缺少有效状态字节");
+                status = runningStatus;
+            }
+
+            if (status == 0xFF)
+            {
+                RequireBytes(position, 1, end);
+                byte metaType = data[position++];
+                int length = ReadVariableLength(data, ref position, end);
+                RequireBytes(position, length, end);
+                if (metaType == 0x51 && length == 3)
+                {
+                    int tempo = (data[position] << 16) | (data[position + 1] << 8) | data[position + 2];
+                    if (tempo == 0)
+                        throw new FormatException("MIDI速度不能为零");
+                    tempos.Add(new TempoChange { ticks = ticks, microsecondsPerQuarter = tempo, order = tempos.Count });
+                }
+                position += length;
+                if (metaType == 0x2F)
+                    break;
+                continue;
+            }
+
+            if (status == 0xF0 || status == 0xF7)
+            {
+                int length = ReadVariableLength(data, ref position, end);
+                RequireBytes(position, length, end);
+                position += length;
+                continue;
+            }
+
+            int eventType = status & 0xF0;
+            int eventLength = eventType == 0xC0 || eventType == 0xD0 ? 1 : 2;
+            if (status >= 0xF0)
+                throw new FormatException($"不支持的MIDI状态: {status:X2}");
+            RequireBytes(position, eventLength, end);
+            int pitch = data[position];
+            int velocity = eventLength == 2 ? data[position + 1] : 0;
+            position += eventLength;
+            if (eventType != 0x80 && eventType != 0x90)
+                continue;
+
+            int channel = status & 0x0F;
+            int key = (channel << 7) | pitch;
+            if (eventType == 0x90 && velocity > 0)
+            {
+                RawNote note = new RawNote { pitch = pitch, velocity = velocity, channel = channel, startTicks = ticks };
+                notes.Add(note);
+                if (!pending.TryGetValue(key, out Queue<RawNote> queue))
+                {
+                    queue = new Queue<RawNote>();
+                    pending.Add(key, queue);
+                }
+                queue.Enqueue(note);
+            }
+            else if (pending.TryGetValue(key, out Queue<RawNote> pendingQueue) && pendingQueue.Count > 0)
+            {
+                // 0x80 和力度为零的 0x90 都是 Note Off。
+                pendingQueue.Dequeue().endTicks = ticks;
+            }
         }
+
+        return end;
     }
-    
-    /// <summary>
-    /// 将ticks转换为秒
-    /// </summary>
-    double TicksToSeconds(int ticks)
+
+    private double TicksToSeconds(int ticks, List<TempoChange> tempos)
     {
-        double beatsPerSecond = bpm / 60.0;
-        double ticksPerSecond = beatsPerSecond * ticksPerQuarter;
-        return ticks / ticksPerSecond;
+        // 先读取整个文件的 tempo map，避免跨轨道和变速音符的头尾时间错误。
+        int previousTicks = 0;
+        int tempo = 500000; // MIDI 默认速度为 120 BPM。
+        double seconds = 0;
+        foreach (TempoChange change in tempos)
+        {
+            if (change.ticks > ticks)
+                break;
+            seconds += (double)(change.ticks - previousTicks) * tempo / ticksPerQuarter / 1000000.0;
+            previousTicks = change.ticks;
+            tempo = change.microsecondsPerQuarter;
+        }
+        return seconds + (double)(ticks - previousTicks) * tempo / ticksPerQuarter / 1000000.0;
     }
-    
-    /// <summary>
-    /// 将ticks转换为拍
-    /// </summary>
-    double TicksToBeats(int ticks)
+
+    private static int ReadVariableLength(byte[] data, ref int position, int end)
     {
-        return (double)ticks / ticksPerQuarter;
+        int value = 0;
+        for (int i = 0; i < 4; i++)
+        {
+            RequireBytes(position, 1, end);
+            byte next = data[position++];
+            value = (value << 7) | (next & 0x7F);
+            if ((next & 0x80) == 0)
+                return value;
+        }
+        throw new FormatException("MIDI可变长度数值超过四字节");
     }
-    
-    /// <summary>
-    /// 获取指定轨道的音符数据
-    /// </summary>
+
+    private static int ReadInt32(byte[] data, int position)
+    {
+        RequireBytes(position, 4, data.Length);
+        int value = (data[position] << 24) | (data[position + 1] << 16) |
+                    (data[position + 2] << 8) | data[position + 3];
+        if (value < 0)
+            throw new FormatException("MIDI数据块过长");
+        return value;
+    }
+
+    private static bool HasChunkHeader(byte[] data, int position, string header)
+    {
+        for (int i = 0; i < header.Length; i++)
+        {
+            if (data[position + i] != header[i])
+                return false;
+        }
+        return true;
+    }
+
+    private static void RequireBytes(int position, int count, int end)
+    {
+        if (position < 0 || count < 0 || position > end || count > end - position)
+            throw new FormatException("MIDI数据不完整或数据块长度无效");
+    }
+
     public MidiTrack GetTrack(string trackName)
     {
         return midiTracks.Find(track => track.trackName.Contains(trackName));
     }
-    
-    /// <summary>
-    /// 获取所有单音符轨道
-    /// </summary>
+
     public List<MidiTrack> GetSingleNoteTracks()
     {
-        return midiTracks.FindAll(track => !track.isLongNote);
+        return midiTracks.FindAll(track => track.notes.Count > 0);
     }
-    
-    /// <summary>
-    /// 获取所有长音符轨道
-    /// </summary>
+
     public List<MidiTrack> GetLongNoteTracks()
     {
-        return midiTracks.FindAll(track => track.isLongNote);
+        return midiTracks.FindAll(track => track.longNotes.Count > 0);
     }
-    
-    /// <summary>
-    /// 打印所有轨道信息（用于调试）
-    /// </summary>
+
     [ContextMenu("打印MIDI信息")]
     public void PrintMidiInfo()
     {
-        Debug.Log($"=== MIDI导入信息 ===");
-        Debug.Log($"BPM: {bpm}");
-        Debug.Log($"Ticks Per Quarter: {ticksPerQuarter}");
-        Debug.Log($"总轨道数: {midiTracks.Count}");
-        
-        foreach (var track in midiTracks)
+        Debug.Log($"MIDI轨道数: {midiTracks.Count}, BPM: {bpm}, Ticks Per Quarter: {ticksPerQuarter}");
+        foreach (MidiTrack track in midiTracks)
         {
-            Debug.Log($"\n轨道: {track.trackName}");
-            Debug.Log($"类型: {(track.isLongNote ? "长音符" : "单音符")}");
-            Debug.Log($"音符数量: {track.notes.Count}");
-            
-            for (int i = 0; i < track.notes.Count; i++)
-            {
-                var note = track.notes[i];
-                string noteInfo = $"  音符 {i + 1}: Pitch#{note.pitch}, " +
-                                 $"时间={note.timeInSeconds:F2}秒/{note.timeInBeats:F2}拍, " +
-                                 $"力度={note.velocity}";
-                
-                if (track.isLongNote)
-                {
-                    noteInfo += $", {(note.isNoteOn ? "按下" : "释放")}";
-                }
-                else
-                {
-                    noteInfo += $", 长度={note.duration:F2}秒";
-                }
-                
-                Debug.Log(noteInfo);
-            }
+            Debug.Log($"轨道 {track.trackName}: {track.notes.Count} 个普通音符，{track.longNotes.Count} 个长音符");
+            foreach (MidiNote note in track.notes)
+                Debug.Log($"  普通音符 Pitch#{note.pitch}: {note.timeInSeconds:F4}秒/{note.timeInBeats:F4}拍，时值={note.duration:F4}秒");
+            foreach (MidiLongNote note in track.longNotes)
+                Debug.Log($"  长音符 Pitch#{note.pitch}: {note.startTimeInSeconds:F4}秒 → {note.endTimeInSeconds:F4}秒，" +
+                          $"{note.startTimeInBeats:F4}拍 → {note.endTimeInBeats:F4}拍");
         }
     }
-    
-    /// <summary>
-    /// 打印精确的时间信息（用于调试精度）
-    /// </summary>
+
     [ContextMenu("打印精确时间信息")]
     public void PrintPreciseTimingInfo()
     {
-        Debug.Log($"=== 精确时间信息 ===");
-        Debug.Log($"BPM: {bpm}");
-        Debug.Log($"Ticks Per Quarter: {ticksPerQuarter}");
-        
-        foreach (var track in midiTracks)
-        {
-            Debug.Log($"\n轨道: {track.trackName}");
-            
-            for (int i = 0; i < track.notes.Count; i++) // 只显示前10个音符
-            {
-                var note = track.notes[i];
-                Debug.Log($"  音符 {i + 1}: Pitch#{note.pitch}, " +
-                         $"精确时间={note.timeInBeats:F4}拍 ({note.timeInSeconds:F4}秒), " +
-                         $"力度={note.velocity}");
-            }
-            
-        }
+        PrintMidiInfo();
     }
 }

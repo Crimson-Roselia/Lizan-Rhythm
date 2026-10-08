@@ -25665,6 +25665,7 @@ MonoBehaviour:
   trackIndex: 4
   noteTheme: 3
   noteSpawner: {fileID: 1664506328}
+  noteMissLine: {fileID: 1408961256}
   trackKey: 107
   autoHit: 1
   notePrefab: {fileID: 8627465974185218952, guid: a6da0aabe374a8e41ae69ec371cb9257,
@@ -45733,6 +45734,7 @@ MonoBehaviour:
   trackIndex: 3
   noteTheme: 2
   noteSpawner: {fileID: 1664506328}
+  noteMissLine: {fileID: 1408961256}
   trackKey: 106
   autoHit: 1
   notePrefab: {fileID: 8627465974185218952, guid: a6da0aabe374a8e41ae69ec371cb9257,
@@ -51235,6 +51237,7 @@ MonoBehaviour:
   trackIndex: 0
   noteTheme: 0
   noteSpawner: {fileID: 1664506328}
+  noteMissLine: {fileID: 1408961256}
   trackKey: 115
   autoHit: 1
   notePrefab: {fileID: 8627465974185218952, guid: a6da0aabe374a8e41ae69ec371cb9257,
@@ -61105,7 +61108,6 @@ MonoBehaviour:
   - {fileID: 677093345}
   - {fileID: 1010764803}
   - {fileID: 196346695}
-  noteMissLine: {fileID: 1408961256}
 --- !u!1 &1670143463
 GameObject:
   m_ObjectHideFlags: 0
@@ -61237,6 +61239,7 @@ MonoBehaviour:
   trackIndex: 1
   noteTheme: 0
   noteSpawner: {fileID: 1664506328}
+  noteMissLine: {fileID: 1408961256}
   trackKey: 100
   autoHit: 1
   notePrefab: {fileID: 8627465974185218952, guid: a6da0aabe374a8e41ae69ec371cb9257,
@@ -66328,6 +66331,7 @@ MonoBehaviour:
   trackIndex: 2
   noteTheme: 1
   noteSpawner: {fileID: 1664506328}
+  noteMissLine: {fileID: 1408961256}
   trackKey: 102
   autoHit: 1
   notePrefab: {fileID: 8627465974185218952, guid: a6da0aabe374a8e41ae69ec371cb9257,
