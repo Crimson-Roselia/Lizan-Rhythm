@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 
 public class TrackObject : MonoBehaviour
@@ -11,6 +12,8 @@ public class TrackObject : MonoBehaviour
     [SerializeField] private Transform noteMissLine;
     [SerializeField] private KeyCode trackKey;
     [SerializeField] private GameObject trackEffect;
+    [Tooltip("成功击打时显示相对标准时间的误差（已包含音符偏移和输入延迟）")]
+    [SerializeField] private TextMeshProUGUI timingErrorText;
     [Header("Judgement Effect Materials")]
     [SerializeField] private Material perfectMaterial;
     [SerializeField] private Material greatMaterial;
@@ -202,7 +205,7 @@ public class TrackObject : MonoBehaviour
         {
             while (inputIndex < scheduledNotes.Count && audioTime >= scheduledNotes[inputIndex].startTime)
             {
-                StartNote(inputIndex, NoteJudgement.Perfect);
+                StartNote(inputIndex, NoteJudgement.Perfect, 0.0);
                 inputIndex++;
             }
             // 低帧率时，一帧可能同时跨过长音符的开始和结束。
@@ -222,17 +225,19 @@ public class TrackObject : MonoBehaviour
         if (!keyDown || inputIndex >= scheduledNotes.Count)
             return;
 
-        NoteJudgement judgement = ScoreManager.JudgeTiming(audioTime - scheduledNotes[inputIndex].startTime);
+        double timingError = audioTime - scheduledNotes[inputIndex].startTime;
+        NoteJudgement judgement = ScoreManager.JudgeTiming(timingError);
         if (judgement != NoteJudgement.Miss)
         {
-            StartNote(inputIndex, judgement);
+            StartNote(inputIndex, judgement, timingError);
             inputIndex++;
         }
     }
 
-    private void StartNote(int index, NoteJudgement judgement)
+    private void StartNote(int index, NoteJudgement judgement, double timingError)
     {
         scheduledNotes[index].judgement = judgement;
+        ShowTimingError(timingError);
 
         if (scheduledNotes[index].longNote == null)
         {
@@ -246,6 +251,18 @@ public class TrackObject : MonoBehaviour
             longNote.BeginHold();
         heldNoteIndices.Add(index);
         // 长音符在尾部成功后才计分，按下头部不会提前计分。
+    }
+
+    private void ShowTimingError(double errorInSeconds)
+    {
+        if (timingErrorText == null)
+            return;
+
+        double milliseconds = System.Math.Round(System.Math.Abs(errorInSeconds) * 1000.0, 1);
+        if (milliseconds == 0.0)
+            timingErrorText.text = "Right hit! 0.0 ms";
+        else
+            timingErrorText.text = $"{(errorInSeconds < 0.0 ? "Earlier: " : "Later: ")} {milliseconds:F1} ms";
     }
 
     private void ProcessHeldNotes(double audioTime, bool keyHeld, bool keyUp)
