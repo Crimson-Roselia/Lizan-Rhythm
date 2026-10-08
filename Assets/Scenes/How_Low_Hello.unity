@@ -10614,14 +10614,14 @@ MonoBehaviour:
   noteTheme: 3
   noteSpawner: {fileID: 1664506328}
   noteMissLine: {fileID: 2042360929}
-  trackKey: 108
+  trackKey: 307
   trackEffect: {fileID: 0}
   perfectMaterial: {fileID: 2100000, guid: ef3902d19a2e75740912c7d0d2952e54, type: 2}
   greatMaterial: {fileID: 2100000, guid: 0322980c8d848df47a18393c05f0525b, type: 2}
   goodMaterial: {fileID: 2100000, guid: a2d63e661aba0a448bf3939783d49b36, type: 2}
   missMaterial: {fileID: 2100000, guid: 8dba951efabcd5b40a1acc8bf6b026cd, type: 2}
   trackEffectDuration: 0.1
-  autoHit: 1
+  autoHit: 0
   notePrefab: {fileID: 3430834761237594686, guid: bd4485fa4112e32428359902710d22b6,
     type: 3}
 --- !u!1 &389124184
@@ -26416,14 +26416,14 @@ MonoBehaviour:
   noteTheme: 3
   noteSpawner: {fileID: 1664506328}
   noteMissLine: {fileID: 2042360929}
-  trackKey: 107
+  trackKey: 308
   trackEffect: {fileID: 0}
   perfectMaterial: {fileID: 2100000, guid: ef3902d19a2e75740912c7d0d2952e54, type: 2}
   greatMaterial: {fileID: 2100000, guid: 0322980c8d848df47a18393c05f0525b, type: 2}
   goodMaterial: {fileID: 2100000, guid: a2d63e661aba0a448bf3939783d49b36, type: 2}
   missMaterial: {fileID: 2100000, guid: 8dba951efabcd5b40a1acc8bf6b026cd, type: 2}
   trackEffectDuration: 0.1
-  autoHit: 1
+  autoHit: 0
   notePrefab: {fileID: 3430834761237594686, guid: bd4485fa4112e32428359902710d22b6,
     type: 3}
 --- !u!1 &1010764802
@@ -36583,8 +36583,8 @@ MonoBehaviour:
   songDelayInSeconds: 0
   marginOfError: 0.1
   inputDelayInMilliseconds: 10
-  noteOffsetInMilliseconds: 400
-  noteTime: 1
+  noteOffsetInMilliseconds: 200
+  noteTime: 0.75
 --- !u!82 &1141403324
 AudioSource:
   m_ObjectHideFlags: 0
@@ -46628,14 +46628,14 @@ MonoBehaviour:
   noteTheme: 2
   noteSpawner: {fileID: 1664506328}
   noteMissLine: {fileID: 1408961256}
-  trackKey: 106
+  trackKey: 108
   trackEffect: {fileID: 1470807186}
   perfectMaterial: {fileID: 2100000, guid: ef3902d19a2e75740912c7d0d2952e54, type: 2}
   greatMaterial: {fileID: 2100000, guid: 0322980c8d848df47a18393c05f0525b, type: 2}
   goodMaterial: {fileID: 2100000, guid: a2d63e661aba0a448bf3939783d49b36, type: 2}
   missMaterial: {fileID: 2100000, guid: 8dba951efabcd5b40a1acc8bf6b026cd, type: 2}
   trackEffectDuration: 0.1
-  autoHit: 1
+  autoHit: 0
   notePrefab: {fileID: 3430834761237594686, guid: bd4485fa4112e32428359902710d22b6,
     type: 3}
 --- !u!1 &1222362001
@@ -52536,14 +52536,14 @@ MonoBehaviour:
   noteTheme: 0
   noteSpawner: {fileID: 1664506328}
   noteMissLine: {fileID: 1408961256}
-  trackKey: 115
+  trackKey: 97
   trackEffect: {fileID: 589975746}
   perfectMaterial: {fileID: 2100000, guid: ef3902d19a2e75740912c7d0d2952e54, type: 2}
   greatMaterial: {fileID: 2100000, guid: 0322980c8d848df47a18393c05f0525b, type: 2}
   goodMaterial: {fileID: 2100000, guid: a2d63e661aba0a448bf3939783d49b36, type: 2}
   missMaterial: {fileID: 2100000, guid: 8dba951efabcd5b40a1acc8bf6b026cd, type: 2}
   trackEffectDuration: 0.1
-  autoHit: 1
+  autoHit: 0
   notePrefab: {fileID: 3430834761237594686, guid: bd4485fa4112e32428359902710d22b6,
     type: 3}
 --- !u!1 &1607080810
@@ -62546,14 +62546,14 @@ MonoBehaviour:
   noteTheme: 0
   noteSpawner: {fileID: 1664506328}
   noteMissLine: {fileID: 1408961256}
-  trackKey: 100
+  trackKey: 115
   trackEffect: {fileID: 1181008655}
   perfectMaterial: {fileID: 2100000, guid: ef3902d19a2e75740912c7d0d2952e54, type: 2}
   greatMaterial: {fileID: 2100000, guid: 0322980c8d848df47a18393c05f0525b, type: 2}
   goodMaterial: {fileID: 2100000, guid: a2d63e661aba0a448bf3939783d49b36, type: 2}
   missMaterial: {fileID: 2100000, guid: 8dba951efabcd5b40a1acc8bf6b026cd, type: 2}
   trackEffectDuration: 0.1
-  autoHit: 1
+  autoHit: 0
   notePrefab: {fileID: 3430834761237594686, guid: bd4485fa4112e32428359902710d22b6,
     type: 3}
 --- !u!1 &1818583206
@@ -67648,14 +67648,14 @@ MonoBehaviour:
   noteTheme: 1
   noteSpawner: {fileID: 1664506328}
   noteMissLine: {fileID: 1408961256}
-  trackKey: 102
+  trackKey: 107
   trackEffect: {fileID: 2021051652}
   perfectMaterial: {fileID: 2100000, guid: ef3902d19a2e75740912c7d0d2952e54, type: 2}
   greatMaterial: {fileID: 2100000, guid: 0322980c8d848df47a18393c05f0525b, type: 2}
   goodMaterial: {fileID: 2100000, guid: a2d63e661aba0a448bf3939783d49b36, type: 2}
   missMaterial: {fileID: 2100000, guid: 8dba951efabcd5b40a1acc8bf6b026cd, type: 2}
   trackEffectDuration: 0.1
-  autoHit: 1
+  autoHit: 0
   notePrefab: {fileID: 3430834761237594686, guid: bd4485fa4112e32428359902710d22b6,
     type: 3}
 --- !u!1 &1955781955
