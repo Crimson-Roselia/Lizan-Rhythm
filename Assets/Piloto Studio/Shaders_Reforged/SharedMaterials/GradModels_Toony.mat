@@ -37,7 +37,8 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: GradModels_Toony
-  m_Shader: {fileID: -6465566751694194690, guid: 5e579b9670f45f0468f178faaee98c05, type: 3}
+  m_Shader: {fileID: -6465566751694194690, guid: 5e579b9670f45f0468f178faaee98c05,
+    type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -440,7 +441,7 @@ Material:
     - _PPDMinSamples: 5
     - _PPDPrimitiveLength: 1
     - _PPDPrimitiveWidth: 1
-    - _QueueControl: -1
+    - _QueueControl: 1
     - _QueueOffset: 0
     - _RayTracing: 0
     - _ReceivesSSR: 0
